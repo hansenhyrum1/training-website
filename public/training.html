@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Training</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <header>
+      <img src="./assets/logo-mark.png" alt="New Leaf logo" />
+      <h1>Training</h1>
+      <nav>
+        <a class="active" href="./training.html">Training</a>
+        <a id="admin-link" class="hidden" href="./admin.html">Admin</a>
+        <button id="sign-out">Sign out</button>
+      </nav>
+    </header>
+
+    <main class="training-shell">
+      <aside class="training-sidebar">
+        <h2>Sections</h2>
+        <div id="section-list" class="stack"></div>
+      </aside>
+
+      <section class="training-content">
+      <section class="card">
+        <h2>Welcome</h2>
+        <p id="welcome-message">Loading your profile...</p>
+      </section>
+
+        <section class="card">
+          <div class="panel-header">
+            <div>
+              <h2>Modules</h2>
+              <p class="status">Complete every module in a section to earn completion.</p>
+            </div>
+          </div>
+          <div id="module-list" class="stack"></div>
+          <p id="module-empty" class="status hidden">No modules yet. Check back soon.</p>
+        </section>
+      </section>
+    </main>
+
+    <footer>Need access? Ask an admin.</footer>
+
+    <script type="module" src="./js/training.js"></script>
+  </body>
+</html>

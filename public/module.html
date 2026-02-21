@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Module</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <header>
+      <img src="./assets/logo-mark.png" alt="New Leaf logo" />
+      <h1 id="module-title">Module</h1>
+      <nav>
+        <a href="./training.html">Training</a>
+        <a id="admin-link" class="hidden" href="./admin.html">Admin</a>
+        <button id="sign-out">Sign out</button>
+      </nav>
+    </header>
+
+    <main class="module-shell">
+      <section class="card" id="module-header">
+        <p class="status" id="module-section">Loading…</p>
+        <h2 id="module-heading">Module</h2>
+        <p class="status" id="module-summary"></p>
+        <div id="module-meta" class="module-meta"></div>
+      </section>
+
+      <section class="card" id="module-content"></section>
+
+      <section class="card hidden" id="module-quiz">
+        <h3>Quiz</h3>
+        <form id="quiz-form" class="stack"></form>
+        <div class="status" id="quiz-status"></div>
+      </section>
+
+      <section class="card" id="module-complete">
+        <div class="actions">
+          <button class="primary" id="mark-complete">Mark complete</button>
+          <a class="secondary" href="./training.html">Back to training</a>
+        </div>
+        <p class="status" id="completion-status"></p>
+      </section>
+    </main>
+
+    <footer>Complete this module to earn section progress.</footer>
+
+    <script type="module" src="./js/module.js"></script>
+  </body>
+</html>

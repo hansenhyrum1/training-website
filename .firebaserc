@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "employee-app-992de"
+  },
+  "targets": {
+    "employee-app-992de": {
+      "hosting": {
+        "training": [
+          "newleaftraining"
+        ]
+      }
+    }
+  }
+}
