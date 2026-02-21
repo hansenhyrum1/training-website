@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Leaf Training - Sign In</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <header>
+      <img src="./assets/logo-mark.png" alt="New Leaf logo" />
+      <h1>New Leaf Training</h1>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Welcome back</h2>
+        <p>Sign in to access your training modules.</p>
+
+        <form id="auth-form">
+          <label for="email">Email</label>
+          <input id="email" type="email" required />
+
+          <label for="password">Password</label>
+          <input id="password" type="password" required minlength="6" />
+
+          <div class="status" id="auth-status"></div>
+
+          <button class="primary" type="submit" id="sign-in-btn">Sign in</button>
+        </form>
+      </section>
+
+      <section class="card notice">
+        <strong>Employee training portal</strong>
+        <p>
+          This site is for New Leaf Nursery employees to complete training modules.
+          If you are a customer, please visit our public website instead.
+        </p>
+        <a class="primary-link" href="https://newleafnurseryhayden.com" rel="noopener" target="_blank">
+          Go to newleafnurseryhayden.com
+        </a>
+      </section>
+
+      <section class="card notice">
+        <strong>Need access?</strong> Your account is created in the app. Use those credentials to sign in here.
+      </section>
+    </main>
+
+    <footer>New Leaf Training Portal</footer>
+
+    <script type="module" src="./js/login.js"></script>
+  </body>
+</html>

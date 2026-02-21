@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin - Training</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" />
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <header>
+      <img src="./assets/logo-mark.png" alt="New Leaf logo" />
+      <h1>Training Admin</h1>
+      <nav>
+        <a href="./training.html">Training</a>
+        <a class="active" href="./admin.html">Admin</a>
+        <button id="sign-out">Sign out</button>
+      </nav>
+    </header>
+
+    <main class="admin-shell">
+      <aside class="admin-sidebar">
+        <h2>Workspace</h2>
+        <button class="tab-button active" data-tab="sections">Sections</button>
+        <button class="tab-button" data-tab="modules">Modules</button>
+        <button class="tab-button" data-tab="progress">Progress</button>
+        <button class="tab-button" data-tab="admins">Admins</button>
+      </aside>
+
+      <section class="admin-content">
+        <section class="card" id="admin-guard">
+          <h2>Checking access…</h2>
+          <p class="status">Only admins can edit training modules.</p>
+        </section>
+
+        <section class="tab-panel card hidden" id="tab-sections">
+          <div class="panel-header">
+            <div>
+              <h2>Sections</h2>
+              <p class="status">Organize modules into sections (general, driving, etc.).</p>
+            </div>
+          </div>
+
+          <form id="section-form" class="stack">
+            <input type="hidden" id="section-id" />
+
+            <label for="section-title">Title</label>
+            <input id="section-title" type="text" required />
+
+            <label for="section-summary">Summary</label>
+            <textarea id="section-summary" rows="2"></textarea>
+
+            <div class="grid">
+              <div>
+                <label for="section-order">Order</label>
+                <input id="section-order" type="number" min="0" />
+              </div>
+              <div>
+                <label for="section-status">Status</label>
+                <select id="section-status">
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="status" id="section-status-text"></div>
+
+            <div class="actions">
+              <button class="primary" type="submit">Save section</button>
+              <button class="secondary" type="button" id="section-reset">Clear</button>
+            </div>
+          </form>
+
+          <div id="section-list" class="stack"></div>
+        </section>
+
+        <section class="tab-panel card hidden" id="tab-modules">
+          <div class="panel-header">
+            <div>
+              <h2>Modules</h2>
+              <p class="status">Build pages and quizzes inside each section.</p>
+            </div>
+          </div>
+
+          <form id="module-form" class="stack">
+            <input type="hidden" id="module-id" />
+
+            <label for="module-title">Title</label>
+            <input id="module-title" type="text" required />
+
+            <label for="module-summary">Summary</label>
+            <textarea id="module-summary" rows="2"></textarea>
+
+            <div class="grid">
+              <div>
+                <label for="module-section">Section</label>
+                <select id="module-section" required></select>
+              </div>
+              <div>
+                <label for="module-type">Type</label>
+                <select id="module-type">
+                  <option value="page">Page</option>
+                  <option value="quiz">Quiz</option>
+                </select>
+              </div>
+              <div>
+                <label for="module-status">Status</label>
+                <select id="module-status">
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                </select>
+              </div>
+              <div>
+                <label for="module-order">Order</label>
+                <input id="module-order" type="number" min="0" />
+              </div>
+            </div>
+
+            <div id="completion-mode-wrap">
+              <label for="completion-mode">Completion</label>
+              <select id="completion-mode">
+                <option value="mark">Mark complete</option>
+                <option value="scroll">Scroll to bottom</option>
+              </select>
+            </div>
+
+            <div id="page-builder" class="stack">
+              <label>Page content</label>
+              <div id="editor" class="editor"></div>
+
+              <div class="stack">
+                <div class="panel-header">
+                  <h3>Attachments</h3>
+                  <button class="secondary" type="button" id="add-attachment">Add file link</button>
+                </div>
+                <div id="attachment-list" class="stack"></div>
+              </div>
+
+              <div class="stack">
+                <div class="panel-header">
+                  <h3>Embeds</h3>
+                  <button class="secondary" type="button" id="add-embed">Add embed</button>
+                </div>
+                <div id="embed-list" class="stack"></div>
+              </div>
+            </div>
+
+            <div id="quiz-builder" class="stack hidden">
+              <div class="panel-header">
+                <h3>Quiz builder</h3>
+                <button class="secondary" type="button" id="add-question">Add question</button>
+              </div>
+              <div id="question-list" class="stack"></div>
+            </div>
+
+            <div class="status" id="module-status-text"></div>
+
+            <div class="actions">
+              <button class="primary" type="submit">Save module</button>
+              <button class="secondary" type="button" id="module-reset">Clear</button>
+            </div>
+          </form>
+
+          <div id="module-list" class="stack"></div>
+        </section>
+
+        <section class="tab-panel card hidden" id="tab-progress">
+          <div class="panel-header">
+            <div>
+              <h2>Progress</h2>
+              <p class="status">Review completion by user, module, and section.</p>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div>
+              <label for="progress-search">Search users</label>
+              <input id="progress-search" type="text" placeholder="Search name or email" />
+              <div id="progress-user-list" class="stack"></div>
+            </div>
+            <div>
+              <h3 id="progress-user-title">Select a user</h3>
+              <div id="progress-detail" class="stack"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab-panel card hidden" id="tab-admins">
+          <div class="panel-header">
+            <div>
+              <h2>Admins</h2>
+              <p class="status">Search users from the main system and add them as admins.</p>
+            </div>
+          </div>
+
+          <form id="admin-form" class="stack">
+            <label for="user-search">Search users</label>
+            <input id="user-search" type="text" placeholder="Search name or email" />
+            <div id="user-results" class="stack"></div>
+            <div class="status" id="admin-status"></div>
+            <button class="secondary" type="button" id="refresh-users">Refresh list</button>
+          </form>
+
+          <div id="admin-list" class="stack"></div>
+        </section>
+      </section>
+    </main>
+
+    <footer>Admins manage training modules, sections, and progress.</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+    <script type="module" src="./js/admin.js"></script>
+  </body>
+</html>
