@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contract Print</title>
+    <link rel="stylesheet" href="./app.css" />
+    <style>
+      body {
+        background: #fff;
+      }
+      .print-shell {
+        max-width: 800px;
+        margin: 32px auto;
+        padding: 0 24px 48px;
+      }
+      .signature-block {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid #dcded4;
+      }
+      .signature-block img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #dcded4;
+        border-radius: 8px;
+      }
+      .roster-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .roster-table th,
+      .roster-table td {
+        border-bottom: 1px solid #e2e3dc;
+        text-align: left;
+        padding: 8px 4px;
+        font-size: 14px;
+      }
+      @media print {
+        header, footer { display: none; }
+        .print-shell { margin: 0; padding: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="print-shell">
+      <div id="print-root"></div>
+    </main>
+
+    <script type="module" src="./js/contract-print.js"></script>
+  </body>
+</html>

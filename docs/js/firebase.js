@@ -23,6 +23,12 @@ import {
   where,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import {
+  getStorage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA6gQ30F8tflaZRmnk7c8T0XQdHGB6Cubw",
@@ -38,6 +44,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const defaultDb = getFirestore(app);
 const db = getFirestore(app, "training-website");
+const storage = getStorage(app);
 
 export {
   auth,
@@ -61,4 +68,8 @@ export {
   startAfter,
   where,
   serverTimestamp,
+  storage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
 };

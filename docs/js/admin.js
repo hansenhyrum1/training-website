@@ -23,37 +23,11 @@ const adminGuard = document.querySelector("#admin-guard");
 const tabButtons = document.querySelectorAll(".tab-button");
 const tabPanels = document.querySelectorAll(".tab-panel");
 
-const sectionForm = document.querySelector("#section-form");
-const sectionIdInput = document.querySelector("#section-id");
-const sectionTitle = document.querySelector("#section-title");
-const sectionSummary = document.querySelector("#section-summary");
-const sectionOrder = document.querySelector("#section-order");
-const sectionStatus = document.querySelector("#section-status");
 const sectionStatusText = document.querySelector("#section-status-text");
-const sectionReset = document.querySelector("#section-reset");
 const sectionList = document.querySelector("#section-list");
-
-const moduleForm = document.querySelector("#module-form");
-const moduleIdInput = document.querySelector("#module-id");
-const moduleTitle = document.querySelector("#module-title");
-const moduleSummary = document.querySelector("#module-summary");
-const moduleSection = document.querySelector("#module-section");
-const moduleType = document.querySelector("#module-type");
-const moduleStatus = document.querySelector("#module-status");
-const moduleOrder = document.querySelector("#module-order");
-const moduleStatusText = document.querySelector("#module-status-text");
-const moduleReset = document.querySelector("#module-reset");
-const moduleList = document.querySelector("#module-list");
-const completionModeWrap = document.querySelector("#completion-mode-wrap");
-const completionMode = document.querySelector("#completion-mode");
-const pageBuilder = document.querySelector("#page-builder");
-const quizBuilder = document.querySelector("#quiz-builder");
-const addAttachmentBtn = document.querySelector("#add-attachment");
-const attachmentList = document.querySelector("#attachment-list");
-const addEmbedBtn = document.querySelector("#add-embed");
-const embedList = document.querySelector("#embed-list");
-const addQuestionBtn = document.querySelector("#add-question");
-const questionList = document.querySelector("#question-list");
+const newSectionBtn = document.querySelector("#new-section");
+const newModuleBtn = document.querySelector("#new-module");
+const contractList = document.querySelector("#contract-list");
 
 const adminForm = document.querySelector("#admin-form");
 const adminStatus = document.querySelector("#admin-status");
@@ -61,19 +35,23 @@ const adminList = document.querySelector("#admin-list");
 const userSearch = document.querySelector("#user-search");
 const userResults = document.querySelector("#user-results");
 const refreshUsers = document.querySelector("#refresh-users");
+const addAdminToggle = document.querySelector("#add-admin-toggle");
 
 const progressSearch = document.querySelector("#progress-search");
 const progressUserList = document.querySelector("#progress-user-list");
 const progressDetail = document.querySelector("#progress-detail");
 const progressUserTitle = document.querySelector("#progress-user-title");
+const progressSort = document.querySelector("#progress-sort");
+const progressFilter = document.querySelector("#progress-filter");
 
-let quill = null;
 let sections = [];
 let modules = [];
 let users = [];
-let attachments = [];
-let embeds = [];
-let quizQuestions = [];
+const progressSummaryByUser = new Map();
+let progressRenderToken = 0;
+let draggedSectionId = null;
+let draggedModuleId = null;
+let draggedModuleSectionId = null;
 
 const USER_PAGE_SIZE = 200;
 let userCursor = null;
@@ -83,6 +61,7 @@ let userHasMore = false;
 wireSignOut("#sign-out");
 
 function setStatus(el, message, isError = false) {
+  if (!el) return;
   el.textContent = message;
   el.style.color = isError ? "#b54747" : "#4a4a44";
 }
@@ -102,372 +81,387 @@ function initTabs() {
   });
 }
 
-function resetSectionForm() {
-  sectionForm.reset();
-  sectionIdInput.value = "";
-  setStatus(sectionStatusText, "");
+function statusLabel(status) {
+  return status === "published" ? "Published" : "Unpublished";
 }
 
-function resetModuleForm() {
-  moduleForm.reset();
-  moduleIdInput.value = "";
-  attachments = [];
-  embeds = [];
-  quizQuestions = [];
-  if (quill) {
-    quill.root.innerHTML = "";
+function promptSectionData(initial = {}) {
+  const title = window.prompt("Section title", initial.title || "");
+  if (!title) return null;
+  const summary = window.prompt("Section summary (optional)", initial.summary || "") || "";
+  return {
+    title: title.trim(),
+    summary: summary.trim(),
+    order: Number.isFinite(initial.order) ? initial.order : 0,
+  };
+}
+
+function renderModuleRow(module) {
+  const row = document.createElement("div");
+  row.className = "module-row";
+  row.dataset.moduleId = module.id;
+  row.dataset.sectionId = module.sectionId || "";
+  row.setAttribute("draggable", "true");
+  const typeLabel = module.type === "quiz" ? "Quiz" : module.type === "contract" ? "Contract" : "Page";
+  const statusClass = module.status === "published" ? "badge-success" : "badge-danger";
+  row.innerHTML = `
+    <div class="module-info">
+      <strong>${module.title || "Untitled module"}</strong>
+      <div class="module-meta">
+        <span class="badge">${typeLabel}</span>
+        <span class="badge ${statusClass}">${statusLabel(module.status)}</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="secondary" data-action="toggle">${module.status === "published" ? "Unpublish" : "Publish"}</button>
+      <button class="secondary" data-action="edit">Edit</button>
+      <button class="danger" data-action="delete">Delete</button>
+    </div>
+  `;
+
+  row.querySelector("[data-action='toggle']").addEventListener("click", async () => {
+    await updateDoc(doc(db, "modules", module.id), {
+      status: module.status === "published" ? "draft" : "published",
+      updatedAt: serverTimestamp(),
+    });
+    await loadModules();
+    renderSections();
+  });
+
+  row.querySelector("[data-action='edit']").addEventListener("click", () => {
+    window.location.href = `./admin-module.html?id=${module.id}`;
+  });
+
+  row.querySelector("[data-action='delete']").addEventListener("click", async () => {
+    const confirmed = window.confirm("Delete this module?");
+    if (!confirmed) return;
+    await deleteDoc(doc(db, "modules", module.id));
+    await loadModules();
+    renderSections();
+  });
+
+  return row;
+}
+
+function renderContracts() {
+  if (!contractList) return;
+  contractList.innerHTML = "";
+  const contracts = modules.filter((module) => module.type === "contract");
+  if (!contracts.length) {
+    contractList.innerHTML = "<p class=\"status\">No contracts yet.</p>";
+    return;
   }
-  renderAttachmentList();
-  renderEmbedList();
-  renderQuestionList();
-  toggleModuleType();
-  setStatus(moduleStatusText, "");
+
+  contracts.forEach((contract) => {
+    const section = sections.find((s) => s.id === contract.sectionId);
+    const card = document.createElement("div");
+    card.className = "section-admin";
+    card.innerHTML = `
+      <div class="section-admin-header">
+        <div>
+          <h3>${contract.title || "Untitled contract"}</h3>
+          <p class="status">${section ? section.title : "No section"} · ${statusLabel(contract.status)}</p>
+        </div>
+        <div class="section-admin-actions">
+          <button class="secondary" data-action="toggle">Toggle users</button>
+          <a class="secondary" target="_blank" rel="noopener" href="./contract-print.html?contractId=${contract.id}&mode=roster">Print roster</a>
+        </div>
+      </div>
+      <div class="contract-users hidden"></div>
+    `;
+
+    const usersWrap = card.querySelector(".contract-users");
+    card.querySelector("[data-action='toggle']").addEventListener("click", async () => {
+      usersWrap.classList.toggle("hidden");
+      if (!usersWrap.dataset.loaded) {
+        usersWrap.innerHTML = "<p class=\"status\">Loading users…</p>";
+        const rows = await buildContractUserRows(contract);
+        usersWrap.innerHTML = "";
+        rows.forEach((row) => usersWrap.appendChild(row));
+        usersWrap.dataset.loaded = "true";
+      }
+    });
+
+    contractList.appendChild(card);
+  });
 }
 
-function initQuill() {
-  if (window.Quill) {
-    quill = new window.Quill("#editor", {
-      theme: "snow",
-      modules: {
-        toolbar: [
-          [{ header: [1, 2, 3, false] }],
-          ["bold", "italic", "underline", "strike"],
-          [{ list: "ordered" }, { list: "bullet" }],
-          ["link", "image", "video"],
-          [{ align: [] }],
-          ["clean"],
-        ],
-      },
+async function buildContractUserRows(contract) {
+  const rows = [];
+  const userRows = users.length ? users : [];
+  if (!userRows.length) {
+    const empty = document.createElement("p");
+    empty.className = "status";
+    empty.textContent = "No users found.";
+    return [empty];
+  }
+
+  const progressDocs = await Promise.all(
+    userRows.map((user) => getDoc(doc(db, "progress", user.uid, "modules", contract.id)))
+  );
+
+  userRows.forEach((user, index) => {
+    const progressSnap = progressDocs[index];
+    const progress = progressSnap.exists() ? progressSnap.data() : null;
+    const signed = progress?.status === "completed";
+    const signedAt = progress?.signedAt?.toDate ? progress.signedAt.toDate() : null;
+    const row = document.createElement("div");
+    row.className = "module-row";
+    row.innerHTML = `
+      <div class="module-meta spaced">
+        <strong>${user.fullName || user.email || "User"}</strong>
+        <span class="status">${signed ? `Signed ${signedAt ? signedAt.toLocaleString() : ""}` : "Unsigned"}</span>
+      </div>
+      <div class="actions">
+        <a class="secondary" target="_blank" rel="noopener" href="./contract-print.html?contractId=${contract.id}&userId=${user.uid}">Print</a>
+      </div>
+    `;
+    rows.push(row);
+  });
+
+  return rows;
+}
+
+function renderSectionCard(section, sectionModules) {
+  const card = document.createElement("div");
+  card.className = "section-admin";
+  card.dataset.sectionId = section.id;
+  const statusClass = section.status === "published" ? "badge-success" : "badge-danger";
+  card.innerHTML = `
+    <div class="section-admin-header">
+      <div>
+        <h3>${section.title || "Untitled"}</h3>
+        <p class="status">${section.summary || ""}</p>
+      </div>
+      <div class="section-admin-actions">
+        <span class="badge ${statusClass}">${statusLabel(section.status)}</span>
+        ${section.status === "published"
+          ? "<button class=\"secondary\" data-action=\"unpublish\">Unpublish</button>"
+          : "<button class=\"secondary\" data-action=\"publish\">Publish</button>"}
+        <button class="secondary" data-action="add-module">Add module</button>
+        <button class="secondary" data-action="edit">Edit</button>
+        <button class="danger" data-action="delete">Delete</button>
+      </div>
+    </div>
+    <div class="section-modules"></div>
+  `;
+
+  const header = card.querySelector(".section-admin-header");
+  header.setAttribute("draggable", "true");
+  header.addEventListener("dragstart", (event) => {
+    draggedSectionId = section.id;
+    event.dataTransfer.effectAllowed = "move";
+  });
+  card.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    card.classList.add("section-drop-target");
+  });
+  card.addEventListener("dragleave", () => {
+    card.classList.remove("section-drop-target");
+  });
+  card.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    card.classList.remove("section-drop-target");
+    const targetId = card.dataset.sectionId;
+    if (!draggedSectionId || !targetId || draggedSectionId === targetId) return;
+    const next = sections.slice();
+    const fromIndex = next.findIndex((s) => s.id === draggedSectionId);
+    const toIndex = next.findIndex((s) => s.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    await Promise.all(next.map((s, index) => updateDoc(doc(db, "sections", s.id), {
+      order: index,
+      updatedAt: serverTimestamp(),
+    })));
+    await loadSections();
+    renderSections();
+  });
+
+  const publishBtn = card.querySelector("[data-action='publish']");
+  if (publishBtn) {
+    publishBtn.addEventListener("click", async () => {
+      await updateDoc(doc(db, "sections", section.id), {
+        status: "published",
+        updatedAt: serverTimestamp(),
+      });
+      await loadSections();
+      renderSections();
     });
   }
+  const unpublishBtn = card.querySelector("[data-action='unpublish']");
+  if (unpublishBtn) {
+    unpublishBtn.addEventListener("click", async () => {
+      await updateDoc(doc(db, "sections", section.id), {
+        status: "draft",
+        updatedAt: serverTimestamp(),
+      });
+      await loadSections();
+      renderSections();
+    });
+  }
+
+  card.querySelector("[data-action='add-module']").addEventListener("click", () => {
+    window.location.href = `./admin-module.html?sectionId=${section.id}`;
+  });
+
+  card.querySelector("[data-action='edit']").addEventListener("click", async () => {
+    const next = promptSectionData({
+      title: section.title || "",
+      summary: section.summary || "",
+      order: section.order ?? 0,
+    });
+    if (!next) return;
+    await updateDoc(doc(db, "sections", section.id), {
+      ...next,
+      updatedAt: serverTimestamp(),
+    });
+    setStatus(sectionStatusText, "Section updated.");
+    await loadSections();
+    renderSections();
+    showTab("content");
+  });
+
+  card.querySelector("[data-action='delete']").addEventListener("click", async () => {
+    const confirmed = window.confirm("Delete this section? Modules will remain but be unassigned.");
+    if (!confirmed) return;
+    await deleteDoc(doc(db, "sections", section.id));
+    await loadSections();
+    renderSections();
+  });
+
+  const moduleWrap = card.querySelector(".section-modules");
+  moduleWrap.dataset.sectionId = section.id;
+  moduleWrap.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    moduleWrap.classList.add("drop-target");
+  });
+  moduleWrap.addEventListener("dragleave", () => {
+    moduleWrap.classList.remove("drop-target");
+  });
+  moduleWrap.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    moduleWrap.classList.remove("drop-target");
+    const targetSectionId = moduleWrap.dataset.sectionId || "";
+    if (!draggedModuleId) return;
+    const rows = [...moduleWrap.querySelectorAll(".module-row[data-module-id]")];
+    const orderedIds = rows.map((row) => row.dataset.moduleId);
+    await updateDoc(doc(db, "modules", draggedModuleId), {
+      sectionId: targetSectionId || null,
+      updatedAt: serverTimestamp(),
+    });
+    await Promise.all(orderedIds.map((id, index) => updateDoc(doc(db, "modules", id), {
+      order: index,
+      updatedAt: serverTimestamp(),
+    })));
+    await loadModules();
+    renderSections();
+  });
+  if (!sectionModules.length) {
+    moduleWrap.innerHTML = "<p class=\"status\">No modules in this section yet.</p>";
+  } else {
+    sectionModules.forEach((mod) => {
+      const row = renderModuleRow(mod);
+      row.addEventListener("dragstart", (event) => {
+        draggedModuleId = mod.id;
+        draggedModuleSectionId = mod.sectionId || "";
+        event.dataTransfer.effectAllowed = "move";
+      });
+      moduleWrap.appendChild(row);
+    });
+  }
+
+  sectionList.appendChild(card);
+}
+
+function renderUnassigned(modList) {
+  const card = document.createElement("div");
+  card.className = "section-admin";
+  card.innerHTML = `
+    <div class="section-admin-header">
+      <div>
+        <h3>Unassigned modules</h3>
+        <p class="status">Modules without a section.</p>
+      </div>
+    </div>
+    <div class="section-modules"></div>
+  `;
+  const moduleWrap = card.querySelector(".section-modules");
+  moduleWrap.dataset.sectionId = "";
+  moduleWrap.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    moduleWrap.classList.add("drop-target");
+  });
+  moduleWrap.addEventListener("dragleave", () => {
+    moduleWrap.classList.remove("drop-target");
+  });
+  moduleWrap.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    moduleWrap.classList.remove("drop-target");
+    if (!draggedModuleId) return;
+    const rows = [...moduleWrap.querySelectorAll(".module-row[data-module-id]")];
+    const orderedIds = rows.map((row) => row.dataset.moduleId);
+    await updateDoc(doc(db, "modules", draggedModuleId), {
+      sectionId: null,
+      updatedAt: serverTimestamp(),
+    });
+    await Promise.all(orderedIds.map((id, index) => updateDoc(doc(db, "modules", id), {
+      order: index,
+      updatedAt: serverTimestamp(),
+    })));
+    await loadModules();
+    renderSections();
+  });
+  modList.forEach((mod) => {
+    const row = renderModuleRow(mod);
+    row.addEventListener("dragstart", (event) => {
+      draggedModuleId = mod.id;
+      draggedModuleSectionId = mod.sectionId || "";
+      event.dataTransfer.effectAllowed = "move";
+    });
+    moduleWrap.appendChild(row);
+  });
+  sectionList.appendChild(card);
 }
 
 function renderSections() {
   sectionList.innerHTML = "";
-  if (!sections.length) {
-    sectionList.innerHTML = "<p class=\"status\">No sections yet.</p>";
+  if (!sections.length && !modules.length) {
+    sectionList.innerHTML = "<p class=\"status\">No sections or modules yet.</p>";
     return;
   }
+
+  const modulesBySection = new Map();
+  sections.forEach((section) => modulesBySection.set(section.id, []));
+  const unassigned = [];
+
+  modules.forEach((mod) => {
+    if (mod.sectionId && modulesBySection.has(mod.sectionId)) {
+      modulesBySection.get(mod.sectionId).push(mod);
+    } else {
+      unassigned.push(mod);
+    }
+  });
 
   sections.forEach((section) => {
-    const card = document.createElement("div");
-    card.className = "user-row";
-    card.innerHTML = `
-      <div class="user-meta">
-        <strong>${section.title || "Untitled"}</strong>
-        <span>${section.summary || ""}</span>
-      </div>
-      <div class="actions">
-        <button class="secondary" data-action="edit">Edit</button>
-        <button class="danger" data-action="delete">Delete</button>
-      </div>
-    `;
-
-    card.querySelector("[data-action='edit']").addEventListener("click", () => {
-      sectionIdInput.value = section.id;
-      sectionTitle.value = section.title || "";
-      sectionSummary.value = section.summary || "";
-      sectionOrder.value = section.order ?? 0;
-      sectionStatus.value = section.status || "draft";
-      showTab("sections");
-    });
-
-    card.querySelector("[data-action='delete']").addEventListener("click", async () => {
-      const confirmed = window.confirm("Delete this section? Modules will remain but be unassigned.");
-      if (!confirmed) return;
-      await deleteDoc(doc(db, "sections", section.id));
-      await loadSections();
-    });
-
-    sectionList.appendChild(card);
+    renderSectionCard(section, modulesBySection.get(section.id) || []);
   });
-}
 
-function renderModuleSelect() {
-  moduleSection.innerHTML = "";
-  sections.forEach((section) => {
-    const option = document.createElement("option");
-    option.value = section.id;
-    option.textContent = section.title || "Untitled";
-    moduleSection.appendChild(option);
-  });
-}
-
-function renderModules() {
-  moduleList.innerHTML = "";
-  if (!modules.length) {
-    moduleList.innerHTML = "<p class=\"status\">No modules yet.</p>";
-    return;
+  if (unassigned.length) {
+    renderUnassigned(unassigned);
   }
-
-  modules.forEach((module) => {
-    const section = sections.find((s) => s.id === module.sectionId);
-    const card = document.createElement("div");
-    card.className = "user-row";
-    card.innerHTML = `
-      <div class="user-meta">
-        <strong>${module.title || "Untitled module"}</strong>
-        <span>${section ? section.title : "No section"} · ${module.type || "page"}</span>
-      </div>
-      <div class="actions">
-        <button class="secondary" data-action="edit">Edit</button>
-        <button class="danger" data-action="delete">Delete</button>
-      </div>
-    `;
-
-    card.querySelector("[data-action='edit']").addEventListener("click", () => {
-      moduleIdInput.value = module.id;
-      moduleTitle.value = module.title || "";
-      moduleSummary.value = module.summary || "";
-      moduleSection.value = module.sectionId || sections[0]?.id || "";
-      moduleType.value = module.type || "page";
-      moduleStatus.value = module.status || "draft";
-      moduleOrder.value = module.order ?? 0;
-      completionMode.value = module.completionMode || "mark";
-      if (quill) quill.root.innerHTML = module.contentHtml || "";
-      attachments = module.attachments || [];
-      embeds = module.embeds || [];
-      quizQuestions = module.quiz?.questions || [];
-      renderAttachmentList();
-      renderEmbedList();
-      renderQuestionList();
-      toggleModuleType();
-      showTab("modules");
-    });
-
-    card.querySelector("[data-action='delete']").addEventListener("click", async () => {
-      const confirmed = window.confirm("Delete this module?");
-      if (!confirmed) return;
-      await deleteDoc(doc(db, "modules", module.id));
-      await loadModules();
-    });
-
-    moduleList.appendChild(card);
-  });
-}
-
-function renderAttachmentList() {
-  attachmentList.innerHTML = "";
-  attachments.forEach((file, index) => {
-    const row = document.createElement("div");
-    row.className = "attachment-row";
-    row.innerHTML = `
-      <label>File title</label>
-      <input type="text" value="${file.title || ""}" data-field="title" />
-      <label>File URL</label>
-      <input type="text" value="${file.url || ""}" data-field="url" />
-      <button class="danger" type="button" data-action="remove">Remove</button>
-    `;
-
-    row.querySelectorAll("input").forEach((input) => {
-      input.addEventListener("input", (event) => {
-        attachments[index][event.target.dataset.field] = event.target.value;
-      });
-    });
-
-    row.querySelector("[data-action='remove']").addEventListener("click", () => {
-      attachments.splice(index, 1);
-      renderAttachmentList();
-    });
-
-    attachmentList.appendChild(row);
-  });
-}
-
-function renderEmbedList() {
-  embedList.innerHTML = "";
-  embeds.forEach((embed, index) => {
-    const row = document.createElement("div");
-    row.className = "embed-row";
-    row.innerHTML = `
-      <label>Embed title</label>
-      <input type="text" value="${embed.title || ""}" data-field="title" />
-      <label>Embed URL</label>
-      <input type="text" value="${embed.url || ""}" data-field="url" />
-      <button class="danger" type="button" data-action="remove">Remove</button>
-    `;
-
-    row.querySelectorAll("input").forEach((input) => {
-      input.addEventListener("input", (event) => {
-        embeds[index][event.target.dataset.field] = event.target.value;
-      });
-    });
-
-    row.querySelector("[data-action='remove']").addEventListener("click", () => {
-      embeds.splice(index, 1);
-      renderEmbedList();
-    });
-
-    embedList.appendChild(row);
-  });
-}
-
-function createQuestion() {
-  return {
-    id: crypto.randomUUID(),
-    type: "multiple_choice",
-    prompt: "",
-    options: ["Option 1", "Option 2"],
-    correctIndex: 0,
-    correctIndexes: [],
-    answers: [],
-    caseSensitive: false,
-  };
-}
-
-function renderQuestionList() {
-  questionList.innerHTML = "";
-  if (!quizQuestions.length) {
-    questionList.innerHTML = "<p class=\"status\">No questions yet.</p>";
-    return;
-  }
-
-  quizQuestions.forEach((q, index) => {
-    const card = document.createElement("div");
-    card.className = "question-card";
-    card.innerHTML = `
-      <div class="panel-header">
-        <strong>Question ${index + 1}</strong>
-        <button class="danger" type="button" data-action="remove">Remove</button>
-      </div>
-      <label>Prompt</label>
-      <textarea data-field="prompt" rows="2">${q.prompt || ""}</textarea>
-      <label>Type</label>
-      <select data-field="type">
-        <option value="multiple_choice">Multiple choice</option>
-        <option value="multiple_select">Multiple select</option>
-        <option value="true_false">True/False</option>
-        <option value="short_answer">Short answer</option>
-      </select>
-      <div data-field="options"></div>
-      <div data-field="short"></div>
-    `;
-
-    const typeSelect = card.querySelector("select");
-    typeSelect.value = q.type;
-
-    card.querySelector("textarea").addEventListener("input", (event) => {
-      q.prompt = event.target.value;
-    });
-
-    typeSelect.addEventListener("change", (event) => {
-      q.type = event.target.value;
-      if (q.type === "true_false") {
-        q.options = ["True", "False"];
-        q.correctIndex = 0;
-      }
-      if (q.type === "short_answer") {
-        q.answers = q.answers || [];
-      }
-      renderQuestionList();
-    });
-
-    const optionsWrap = card.querySelector("[data-field='options']");
-    const shortWrap = card.querySelector("[data-field='short']");
-
-    if (q.type === "multiple_choice" || q.type === "multiple_select" || q.type === "true_false") {
-      optionsWrap.innerHTML = "<label>Options</label>";
-      q.options = q.options || [];
-      q.options.forEach((opt, optIndex) => {
-        const row = document.createElement("div");
-        row.className = "actions";
-        const controlType = q.type === "multiple_select" ? "checkbox" : "radio";
-        row.innerHTML = `
-          <input type="${controlType}" name="correct-${index}" ${
-          q.type === "multiple_select"
-            ? (q.correctIndexes || []).includes(optIndex) ? "checked" : ""
-            : Number(q.correctIndex) === optIndex ? "checked" : ""
-        } />
-          <input type="text" value="${opt}" />
-          ${q.type === "true_false" ? "" : "<button class=\"danger\" type=\"button\">Remove</button>"}
-        `;
-
-        const textInput = row.querySelector("input[type='text']");
-        textInput.addEventListener("input", (event) => {
-          q.options[optIndex] = event.target.value;
-        });
-
-        const selectInput = row.querySelector(`input[type='${controlType}']`);
-        selectInput.addEventListener("change", (event) => {
-          if (q.type === "multiple_select") {
-            const list = new Set(q.correctIndexes || []);
-            if (event.target.checked) list.add(optIndex);
-            else list.delete(optIndex);
-            q.correctIndexes = [...list];
-          } else {
-            q.correctIndex = optIndex;
-          }
-        });
-
-        const removeBtn = row.querySelector("button");
-        if (removeBtn) {
-          removeBtn.addEventListener("click", () => {
-            q.options.splice(optIndex, 1);
-            q.correctIndexes = (q.correctIndexes || []).filter((i) => i !== optIndex);
-            if (q.correctIndex >= q.options.length) q.correctIndex = 0;
-            renderQuestionList();
-          });
-        }
-
-        optionsWrap.appendChild(row);
-      });
-
-      if (q.type !== "true_false") {
-        const addBtn = document.createElement("button");
-        addBtn.className = "secondary";
-        addBtn.type = "button";
-        addBtn.textContent = "Add option";
-        addBtn.addEventListener("click", () => {
-          q.options.push(`Option ${q.options.length + 1}`);
-          renderQuestionList();
-        });
-        optionsWrap.appendChild(addBtn);
-      }
-    }
-
-    if (q.type === "short_answer") {
-      shortWrap.innerHTML = `
-        <label>Accepted answers (comma-separated)</label>
-        <input type="text" value="${(q.answers || []).join(", ")}" />
-        <label><input type="checkbox" ${q.caseSensitive ? "checked" : ""} /> Case sensitive</label>
-      `;
-      const answerInput = shortWrap.querySelector("input[type='text']");
-      answerInput.addEventListener("input", (event) => {
-        q.answers = event.target.value.split(",").map((a) => a.trim()).filter(Boolean);
-      });
-      const caseToggle = shortWrap.querySelector("input[type='checkbox']");
-      caseToggle.addEventListener("change", (event) => {
-        q.caseSensitive = event.target.checked;
-      });
-    }
-
-    card.querySelector("[data-action='remove']").addEventListener("click", () => {
-      quizQuestions.splice(index, 1);
-      renderQuestionList();
-    });
-
-    questionList.appendChild(card);
-  });
-}
-
-function toggleModuleType() {
-  const isQuiz = moduleType.value === "quiz";
-  quizBuilder.classList.toggle("hidden", !isQuiz);
-  pageBuilder.classList.toggle("hidden", isQuiz);
-  completionModeWrap.classList.toggle("hidden", isQuiz);
 }
 
 async function loadSections() {
-  const snap = await getDocs(query(collection(db, "sections"), orderBy("order", "asc")));
+const snap = await getDocs(query(collection(db, "sections"), orderBy("order", "asc")));
   sections = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-  renderSections();
-  renderModuleSelect();
+  progressSummaryByUser.clear();
 }
 
 async function loadModules() {
   const snap = await getDocs(query(collection(db, "modules"), orderBy("order", "asc")));
   modules = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-  renderModules();
+  progressSummaryByUser.clear();
 }
 
 async function loadAdmins() {
@@ -513,95 +507,194 @@ function renderUserResults(targetEl, filterValue, onSelect) {
         const email = (row.email || "").toLowerCase();
         return name.includes(q) || email.includes(q);
       })
-    : users;
+    : users.slice(0, 25);
 
-  const maxShown = 50;
-  const visible = filtered.slice(0, maxShown);
-  targetEl.innerHTML = "";
-
-  if (!visible.length) {
-    targetEl.innerHTML = "<p class=\"status\">No users found.</p>";
+  if (!filtered.length) {
+    targetEl.innerHTML = "<p class=\"status\">No matches.</p>";
     return;
   }
 
-  visible.forEach((row) => {
-    const name = row.fullName || "";
-    const email = row.email || "";
-    const label = name || email || "(no name)";
-    const sub = name && email ? email : "";
-    const el = document.createElement("div");
-    el.className = "user-row";
-    el.innerHTML = `
+  targetEl.innerHTML = "";
+  filtered.forEach((row) => {
+    const userRow = document.createElement("div");
+    userRow.className = "user-row";
+    userRow.innerHTML = `
       <div class="user-meta">
-        <strong>${label}</strong>
-        ${sub ? `<span>${sub}</span>` : ""}
+        <strong>${row.fullName || row.email || "User"}</strong>
+        <span>${row.email || ""}</span>
+        <span class="status">UID: ${row.uid}</span>
       </div>
-      <button class="secondary" data-uid="${row.uid}">${onSelect.label}</button>
+      <button class="secondary" data-action="select">${onSelect.label}</button>
     `;
-    el.querySelector("button").addEventListener("click", () => onSelect.action(row));
-    targetEl.appendChild(el);
+
+    userRow.querySelector("[data-action='select']").addEventListener("click", () => onSelect.action(row));
+    targetEl.appendChild(userRow);
+  });
+}
+
+function buildSectionModules() {
+  const map = new Map();
+  sections.forEach((section) => map.set(section.id, []));
+  modules.forEach((module) => {
+    if (module.sectionId && map.has(module.sectionId)) {
+      map.get(module.sectionId).push(module);
+    }
+  });
+  const sectionIds = [...map.entries()]
+    .filter(([, mods]) => mods.length)
+    .map(([id]) => id);
+  return { map, sectionIds };
+}
+
+async function fetchProgressSummary(user) {
+  if (progressSummaryByUser.has(user.uid)) {
+    return progressSummaryByUser.get(user.uid);
+  }
+  const progressSnap = await getDocs(collection(db, "progress", user.uid, "modules"));
+  const progressMap = {};
+  progressSnap.forEach((docSnap) => {
+    progressMap[docSnap.id] = docSnap.data();
   });
 
-  if (filtered.length > maxShown) {
-    const note = document.createElement("p");
-    note.className = "status";
-    note.textContent = `Showing ${maxShown} of ${filtered.length} results. Refine your search to see more.`;
-    targetEl.appendChild(note);
+  const { map, sectionIds } = buildSectionModules();
+  let completed = 0;
+  let modulesCompleted = 0;
+  let modulesTotal = 0;
+  sectionIds.forEach((sectionId) => {
+    const sectionModules = map.get(sectionId) || [];
+    modulesTotal += sectionModules.length;
+    sectionModules.forEach((module) => {
+      if (progressMap[module.id]?.status === "completed") {
+        modulesCompleted += 1;
+      }
+    });
+    const isComplete = sectionModules.length
+      ? sectionModules.every((module) => progressMap[module.id]?.status === "completed")
+      : false;
+    if (isComplete) completed += 1;
+  });
+  const summary = {
+    completed,
+    total: sectionIds.length,
+    modulesCompleted,
+    modulesTotal,
+  };
+  progressSummaryByUser.set(user.uid, summary);
+  return summary;
+}
+
+async function renderProgressUsers() {
+  const renderToken = ++progressRenderToken;
+  const q = progressSearch.value.trim().toLowerCase();
+  const filtered = q
+    ? users.filter((row) => {
+        const name = (row.fullName || "").toLowerCase();
+        const email = (row.email || "").toLowerCase();
+        return name.includes(q) || email.includes(q);
+      })
+    : users.slice(0, 25);
+
+  if (!filtered.length) {
+    progressUserList.innerHTML = "<p class=\"status\">No matches.</p>";
+    return;
   }
 
-  if (userHasMore) {
-    const moreWrap = document.createElement("div");
-    moreWrap.className = "status";
-    const moreBtn = document.createElement("button");
-    moreBtn.className = "secondary";
-    moreBtn.type = "button";
-    moreBtn.textContent = loadingUsers ? "Loading…" : "Load more users";
-    moreBtn.disabled = loadingUsers;
-    moreBtn.addEventListener("click", () => loadUsers({ reset: false }));
-    moreWrap.appendChild(moreBtn);
-    targetEl.appendChild(moreWrap);
+  progressUserList.innerHTML = "<p class=\"status\">Loading progress…</p>";
+  const summaries = await Promise.all(
+    filtered.map((row) => fetchProgressSummary(row).catch(() => null))
+  );
+  if (renderToken !== progressRenderToken) return;
+
+  let rows = filtered.map((row, index) => ({ row, summary: summaries[index] }));
+  const filterValue = progressFilter?.value || "all";
+  if (filterValue !== "all") {
+    rows = rows.filter(({ summary }) => {
+      if (!summary) return filterValue === "no_progress";
+      const hasSections = summary.total > 0;
+      const isComplete = hasSections && summary.completed === summary.total;
+      const isIncomplete = hasSections && summary.completed < summary.total;
+      const noProgress = !hasSections;
+      if (filterValue === "completed") return isComplete;
+      if (filterValue === "incomplete") return isIncomplete;
+      if (filterValue === "no_progress") return noProgress;
+      return true;
+    });
   }
+
+  const sortValue = progressSort?.value || "completion_desc";
+  rows.sort((a, b) => {
+    const nameA = (a.row.fullName || a.row.email || "").toLowerCase();
+    const nameB = (b.row.fullName || b.row.email || "").toLowerCase();
+    const completionA = a.summary?.modulesTotal
+      ? a.summary.modulesCompleted / a.summary.modulesTotal
+      : 0;
+    const completionB = b.summary?.modulesTotal
+      ? b.summary.modulesCompleted / b.summary.modulesTotal
+      : 0;
+    if (sortValue === "name_asc") return nameA.localeCompare(nameB);
+    if (sortValue === "name_desc") return nameB.localeCompare(nameA);
+    if (sortValue === "completion_asc") {
+      if (completionA !== completionB) return completionA - completionB;
+      return nameA.localeCompare(nameB);
+    }
+    if (completionA !== completionB) return completionB - completionA;
+    return nameA.localeCompare(nameB);
+  });
+
+  if (!rows.length) {
+    progressUserList.innerHTML = "<p class=\"status\">No matches.</p>";
+    return;
+  }
+
+  progressUserList.innerHTML = "";
+  rows.forEach(({ row, summary }) => {
+    const name = row.fullName || row.email || "User";
+    const userRow = document.createElement("div");
+    userRow.className = "user-row";
+    userRow.innerHTML = `
+      <div class="user-meta">
+        <strong>${name}</strong>
+        <span class="status" data-progress>Loading progress…</span>
+      </div>
+    `;
+
+    userRow.addEventListener("click", () => loadUserProgress(row));
+    const progressEl = userRow.querySelector("[data-progress]");
+    if (!summary) {
+      progressEl.textContent = "Progress unavailable.";
+    } else {
+      progressEl.textContent = summary.total
+        ? `Sections completed ${summary.completed}/${summary.total} • Modules completed ${summary.modulesCompleted}/${summary.modulesTotal}`
+        : "No sections yet.";
+    }
+
+    progressUserList.appendChild(userRow);
+  });
 }
 
 async function loadUsers({ reset = false } = {}) {
   if (loadingUsers) return;
-  loadingUsers = true;
   if (reset) {
     users = [];
     userCursor = null;
-    userHasMore = false;
+    userHasMore = true;
   }
+  if (!userHasMore && !reset) return;
 
-  try {
-    let q = query(collection(defaultDb, "users"), orderBy("fullName"), limit(USER_PAGE_SIZE));
-    if (userCursor) {
-      q = query(collection(defaultDb, "users"), orderBy("fullName"), startAfter(userCursor), limit(USER_PAGE_SIZE));
-    }
+  loadingUsers = true;
+  const q = userCursor
+    ? query(collection(defaultDb, "users"), orderBy("email"), startAfter(userCursor), limit(USER_PAGE_SIZE))
+    : query(collection(defaultDb, "users"), orderBy("email"), limit(USER_PAGE_SIZE));
 
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-      userCursor = snapshot.docs[snapshot.docs.length - 1];
-      userHasMore = snapshot.size === USER_PAGE_SIZE;
-      const nextRows = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          uid: docSnap.id,
-          fullName: data.fullName || "",
-          email: data.email || "",
-        };
-      });
+  const snap = await getDocs(q);
+  if (!snap.empty) {
+    userCursor = snap.docs[snap.docs.length - 1];
+  }
+  userHasMore = snap.docs.length === USER_PAGE_SIZE;
+  users = [...users, ...snap.docs.map((docSnap) => ({ uid: docSnap.id, ...docSnap.data() }))];
+  loadingUsers = false;
 
-      const seen = new Set(users.map((u) => u.uid));
-      nextRows.forEach((row) => {
-        if (!seen.has(row.uid)) users.push(row);
-      });
-    } else {
-      userHasMore = false;
-    }
-  } catch (error) {
-    setStatus(adminStatus, error.message, true);
-  } finally {
-    loadingUsers = false;
+  if (reset) {
     renderUserResults(userResults, userSearch.value, {
       label: "Add admin",
       action: async (row) => {
@@ -619,16 +712,14 @@ async function loadUsers({ reset = false } = {}) {
         }
       },
     });
-    renderUserResults(progressUserList, progressSearch.value, {
-      label: "View",
-      action: (row) => loadUserProgress(row),
-    });
+    renderProgressUsers();
+    renderContracts();
   }
 }
 
 async function loadUserProgress(user) {
-  progressUserTitle.textContent = user.fullName || user.email || "User";
   progressDetail.innerHTML = "<p class=\"status\">Loading progress…</p>";
+  progressUserTitle.textContent = user.fullName || user.email || "User";
 
   const progressSnap = await getDocs(collection(db, "progress", user.uid, "modules"));
   const progressMap = {};
@@ -636,165 +727,160 @@ async function loadUserProgress(user) {
     progressMap[docSnap.id] = docSnap.data();
   });
 
-  const grouped = sections.map((section) => {
-    const sectionModules = modules.filter((m) => m.sectionId === section.id);
-    const completedCount = sectionModules.filter((m) => progressMap[m.id]?.status === "completed").length;
-    const isComplete = sectionModules.length > 0 && completedCount === sectionModules.length;
-    return { section, sectionModules, completedCount, isComplete, progressMap };
-  });
-
-  progressDetail.innerHTML = "";
-  if (!grouped.length) {
-    progressDetail.innerHTML = "<p class=\"status\">No sections found.</p>";
+  if (!sections.length || !modules.length) {
+    progressDetail.innerHTML = "<p class=\"status\">No sections or modules yet.</p>";
     return;
   }
 
-  grouped.forEach((group) => {
-    const card = document.createElement("div");
-    card.className = "stack";
-    card.innerHTML = `
-      <div class="panel-header">
-        <div>
-          <strong>${group.section.title || "Untitled section"}</strong>
-          <span class="status">${group.completedCount}/${group.sectionModules.length} complete</span>
-        </div>
-        ${group.isComplete ? '<span class="badge">Complete</span>' : ""}
+  const groups = sections.map((section) => {
+    const sectionModules = modules.filter((m) => m.sectionId === section.id);
+    return { section, sectionModules, progressMap };
+  });
+
+  progressDetail.innerHTML = "";
+  const summaryWrap = document.createElement("div");
+  summaryWrap.className = "stack";
+  summaryWrap.innerHTML = "<strong>Sections</strong>";
+  groups.forEach((group) => {
+    const sectionComplete = group.sectionModules.length
+      ? group.sectionModules.every((module) => group.progressMap[module.id]?.status === "completed")
+      : false;
+    const row = document.createElement("div");
+    row.className = `module-row${sectionComplete ? " is-complete" : ""}`;
+    row.innerHTML = `
+      <div class="module-meta spaced">
+        <strong>${group.section.title || "Untitled"}</strong>
+        ${sectionComplete ? "<span class=\"badge\">Completed</span>" : "<span class=\"status\">In progress</span>"}
       </div>
     `;
+    summaryWrap.appendChild(row);
+  });
+  progressDetail.appendChild(summaryWrap);
 
-    group.sectionModules.forEach((module) => {
-      const progress = group.progressMap[module.id] || {};
-      const score = typeof progress.quizPercent === "number" ? `Score ${Math.round(progress.quizPercent)}%` : "";
-      const status = progress.status || "not_started";
-      const row = document.createElement("div");
-      row.className = "module-item";
-      row.innerHTML = `
-        <strong>${module.title || "Untitled module"}</strong>
-        <div class="module-meta">
-          <span>${status}</span>
-          ${score ? `<span>${score}</span>` : ""}
-        </div>
-      `;
-      card.appendChild(row);
-    });
+  groups.forEach((group) => {
+    const groupWrap = document.createElement("div");
+    groupWrap.className = "stack";
+    groupWrap.innerHTML = `
+      <strong>${group.section.title || "Untitled"}</strong>
+    `;
 
-    progressDetail.appendChild(card);
+    if (!group.sectionModules.length) {
+      const empty = document.createElement("p");
+      empty.className = "status";
+      empty.textContent = "No modules in this section.";
+      groupWrap.appendChild(empty);
+    } else {
+      group.sectionModules.forEach((module) => {
+        const progress = group.progressMap[module.id] || {};
+        const row = document.createElement("div");
+        row.className = `module-row${progress.status === "completed" ? " is-complete" : ""}`;
+        const status = progress.status === "completed" ? "Completed" : "In progress";
+        const score = typeof progress.quizPercent === "number" ? `Score ${Math.round(progress.quizPercent)}%` : "";
+        row.innerHTML = `
+          <div class="module-meta spaced">
+            <strong>${module.title || "Untitled module"}</strong>
+            ${progress.status === "completed"
+              ? "<span class=\"badge\">Completed</span>"
+              : "<span class=\"status\">In progress</span>"}
+          </div>
+        `;
+        groupWrap.appendChild(row);
+      });
+    }
+
+    progressDetail.appendChild(groupWrap);
   });
 }
 
-sectionForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const payload = {
-    title: sectionTitle.value.trim(),
-    summary: sectionSummary.value.trim(),
-    order: Number(sectionOrder.value || 0),
-    status: sectionStatus.value,
-    updatedAt: serverTimestamp(),
-  };
-
-  try {
-    if (sectionIdInput.value) {
-      await updateDoc(doc(db, "sections", sectionIdInput.value), payload);
-      setStatus(sectionStatusText, "Section updated.");
-    } else {
-      payload.createdAt = serverTimestamp();
-      await addDoc(collection(db, "sections"), payload);
-      setStatus(sectionStatusText, "Section created.");
-    }
-    resetSectionForm();
-    await loadSections();
-  } catch (error) {
-    setStatus(sectionStatusText, error.message, true);
-  }
-});
-
-sectionReset.addEventListener("click", resetSectionForm);
-
-moduleType.addEventListener("change", toggleModuleType);
-moduleReset.addEventListener("click", resetModuleForm);
-
-moduleForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const payload = {
-    title: moduleTitle.value.trim(),
-    summary: moduleSummary.value.trim(),
-    sectionId: moduleSection.value,
-    type: moduleType.value,
-    status: moduleStatus.value,
-    order: Number(moduleOrder.value || 0),
-    completionMode: completionMode.value,
-    contentHtml: quill ? quill.root.innerHTML : "",
-    attachments: attachments.filter((a) => a.url),
-    embeds: embeds.filter((e) => e.url),
-    quiz: moduleType.value === "quiz" ? { questions: quizQuestions } : null,
-    updatedAt: serverTimestamp(),
-  };
-
-  try {
-    if (moduleIdInput.value) {
-      await updateDoc(doc(db, "modules", moduleIdInput.value), payload);
-      setStatus(moduleStatusText, "Module updated.");
-    } else {
-      payload.createdAt = serverTimestamp();
-      await addDoc(collection(db, "modules"), payload);
-      setStatus(moduleStatusText, "Module created.");
-    }
-    resetModuleForm();
-    await loadModules();
-  } catch (error) {
-    setStatus(moduleStatusText, error.message, true);
-  }
-});
-
-addAttachmentBtn.addEventListener("click", () => {
-  attachments.push({ title: "", url: "" });
-  renderAttachmentList();
-});
-
-addEmbedBtn.addEventListener("click", () => {
-  embeds.push({ title: "", url: "" });
-  renderEmbedList();
-});
-
-addQuestionBtn.addEventListener("click", () => {
-  quizQuestions.push(createQuestion());
-  renderQuestionList();
-});
-
-adminForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-});
-
-userSearch.addEventListener("input", () => {
-  renderUserResults(userResults, userSearch.value, {
-    label: "Add admin",
-    action: async (row) => {
-      try {
-        await setDoc(doc(db, "admins", row.uid), {
-          email: row.email || null,
-          fullName: row.fullName || null,
-          addedAt: serverTimestamp(),
-          addedBy: auth.currentUser?.uid || null,
-        });
-        setStatus(adminStatus, "Admin added.");
-        loadAdmins();
-      } catch (error) {
-        setStatus(adminStatus, error.message, true);
-      }
-    },
+if (newSectionBtn) {
+  newSectionBtn.addEventListener("click", () => {
+    const next = promptSectionData();
+    if (!next) return;
+    addDoc(collection(db, "sections"), {
+      ...next,
+      status: "draft",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+      .then(async () => {
+        setStatus(sectionStatusText, "Section saved as unpublished.");
+        await loadSections();
+        renderSections();
+      })
+      .catch((error) => {
+        setStatus(sectionStatusText, error.message, true);
+      });
   });
-});
+}
 
-refreshUsers.addEventListener("click", () => {
-  loadUsers({ reset: true });
-});
+if (newModuleBtn) {
+  newModuleBtn.addEventListener("click", () => {
+    window.location.href = "./admin-module.html";
+  });
+}
+
+if (adminForm) {
+  adminForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+}
+
+if (addAdminToggle && adminForm) {
+  addAdminToggle.addEventListener("click", () => {
+    const willShow = adminForm.classList.contains("hidden");
+    adminForm.classList.toggle("hidden", !willShow);
+    addAdminToggle.textContent = willShow ? "Close" : "Add admin";
+    if (!willShow) {
+      if (userSearch) userSearch.value = "";
+      if (userResults) userResults.innerHTML = "";
+      if (adminStatus) adminStatus.textContent = "";
+    } else {
+      if (userSearch) userSearch.focus();
+    }
+  });
+}
+
+if (userSearch) {
+  userSearch.addEventListener("input", () => {
+    renderUserResults(userResults, userSearch.value, {
+      label: "Add admin",
+      action: async (row) => {
+        try {
+          await setDoc(doc(db, "admins", row.uid), {
+            email: row.email || null,
+            fullName: row.fullName || null,
+            addedAt: serverTimestamp(),
+            addedBy: auth.currentUser?.uid || null,
+          });
+          setStatus(adminStatus, "Admin added.");
+          loadAdmins();
+        } catch (error) {
+          setStatus(adminStatus, error.message, true);
+        }
+      },
+    });
+  });
+}
+
+if (refreshUsers) {
+  refreshUsers.addEventListener("click", () => {
+    loadUsers({ reset: true });
+  });
+}
 
 progressSearch.addEventListener("input", () => {
-  renderUserResults(progressUserList, progressSearch.value, {
-    label: "View",
-    action: (row) => loadUserProgress(row),
-  });
+  renderProgressUsers();
 });
+if (progressSort) {
+  progressSort.addEventListener("change", () => {
+    renderProgressUsers();
+  });
+}
+if (progressFilter) {
+  progressFilter.addEventListener("change", () => {
+    renderProgressUsers();
+  });
+}
 
 requireAuth({
   onAuthed: async (user) => {
@@ -809,14 +895,14 @@ requireAuth({
 
     adminGuard.classList.add("hidden");
     tabPanels.forEach((panel) => panel.classList.remove("hidden"));
-    showTab("sections");
+    showTab("content");
     initTabs();
-    initQuill();
-    toggleModuleType();
     await loadSections();
     await loadModules();
+    renderSections();
     await loadAdmins();
     await loadUsers({ reset: true });
+    renderContracts();
   },
   onUnauthed: () => {
     window.location.href = "./index.html";

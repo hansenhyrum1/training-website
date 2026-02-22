@@ -37,15 +37,6 @@
       ]
     }
   ],
-  "hosting": {
-    "target": "training",
-    "public": "public",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ]
-  },
   "storage": {
     "rules": "storage.rules"
   }

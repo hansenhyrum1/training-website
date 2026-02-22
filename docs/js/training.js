@@ -75,34 +75,42 @@ function renderModuleList() {
   sectionModules.forEach((module) => {
     const status = progressByModule[module.id]?.status || "not_started";
     const score = progressByModule[module.id]?.quizPercent;
-    const badge = status === "completed" ? "Complete" : "Not started";
+    const completedText = status === "completed" ? "Completed" : "Not completed";
+    const completedClass = status === "completed" ? "badge-success" : "badge-danger";
     const scoreText = typeof score === "number" ? `Score: ${Math.round(score)}%` : "";
+    const typeLabel = module.type === "quiz" ? "Quiz" : module.type === "contract" ? "Contract" : "Page";
 
     const card = document.createElement("div");
     card.className = "module-item";
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
     card.innerHTML = `
-      <strong>${module.title || "Untitled module"}</strong>
-      <span class="status">${module.summary || ""}</span>
+      <div class="module-item-header">
+        <strong>${module.title || "Untitled module"}</strong>
+        <span class="badge badge-large ${completedClass}">${completedText}</span>
+      </div>
       <div class="module-meta">
-        <span class="badge">${module.type === "quiz" ? "Quiz" : "Page"}</span>
-        <span>${badge}</span>
+        <span class="badge">${typeLabel}</span>
         ${scoreText ? `<span>${scoreText}</span>` : ""}
       </div>
-      <div class="actions">
-        <a class="primary" href="./module.html?id=${module.id}">Open module</a>
-      </div>
     `;
+    const openModule = () => {
+      window.location.href = `./module.html?id=${module.id}`;
+    };
+    card.addEventListener("click", openModule);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openModule();
+      }
+    });
     moduleList.appendChild(card);
   });
 }
 
 async function loadTrainingData(user, isAdmin) {
-  const sectionsQuery = isAdmin
-    ? query(collection(db, "sections"), orderBy("order", "asc"))
-    : query(collection(db, "sections"), where("status", "==", "published"), orderBy("order", "asc"));
-  const modulesQuery = isAdmin
-    ? query(collection(db, "modules"), orderBy("order", "asc"))
-    : query(collection(db, "modules"), where("status", "==", "published"), orderBy("order", "asc"));
+  const sectionsQuery = query(collection(db, "sections"), orderBy("order", "asc"));
+  const modulesQuery = query(collection(db, "modules"), orderBy("order", "asc"));
 
   const [sectionsSnap, modulesSnap, progressSnap] = await Promise.all([
     getDocs(sectionsQuery),
@@ -110,8 +118,16 @@ async function loadTrainingData(user, isAdmin) {
     getDocs(collection(db, "progress", user.uid, "modules")),
   ]);
 
-  sections = sectionsSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-  modules = modulesSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  const allSections = sectionsSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  const allModules = modulesSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  const visibleSections = allSections.filter((section) => section.status === "published");
+  const visibleSectionIds = new Set(visibleSections.map((section) => section.id));
+  const visibleModules = allModules.filter(
+    (module) => module.status === "published" && visibleSectionIds.has(module.sectionId)
+  );
+
+  sections = visibleSections;
+  modules = visibleModules;
   progressByModule = {};
   progressSnap.forEach((docSnap) => {
     progressByModule[docSnap.id] = docSnap.data();
@@ -126,10 +142,17 @@ requireAuth({
   onAuthed: async (user) => {
     welcomeMessage.textContent = `Signed in as ${user.email}`;
 
-    const adminDoc = await getDoc(doc(db, "admins", user.uid));
-    const isAdmin = adminDoc.exists();
-    if (adminDoc.exists()) {
-      adminLink.classList.remove("hidden");
+    let isAdmin = false;
+    try {
+      const adminDoc = await getDoc(doc(db, "admins", user.uid));
+      isAdmin = adminDoc.exists();
+      if (adminDoc.exists()) {
+        adminLink.classList.remove("hidden");
+      }
+    } catch (error) {
+      if (error?.code !== "permission-denied") {
+        throw error;
+      }
     }
 
     await loadTrainingData(user, isAdmin);

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Module</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" />
     <link rel="stylesheet" href="./app.css" />
   </head>
   <body>
@@ -19,26 +20,68 @@
 
     <main class="module-shell">
       <section class="card" id="module-header">
-        <p class="status" id="module-section">Loading…</p>
-        <h2 id="module-heading">Module</h2>
-        <p class="status" id="module-summary"></p>
-        <div id="module-meta" class="module-meta"></div>
+        <div class="panel-header">
+          <div>
+            <p class="status" id="module-section">Loading…</p>
+            <h2 id="module-heading">Module</h2>
+            <div id="module-meta" class="module-meta"></div>
+          </div>
+          <button class="secondary" id="return-to-modules-top" type="button">Back to modules</button>
+        </div>
       </section>
 
       <section class="card" id="module-content"></section>
 
       <section class="card hidden" id="module-quiz">
         <h3>Quiz</h3>
+        <div class="quiz-top-row">
+          <div class="status" id="quiz-score-top"></div>
+          <button class="secondary" type="button" id="quiz-retake-top" disabled>Retake quiz</button>
+        </div>
         <form id="quiz-form" class="stack"></form>
+        <div class="quiz-actions">
+          <button class="secondary" type="button" id="quiz-retake" disabled>Retake quiz</button>
+        </div>
         <div class="status" id="quiz-status"></div>
+      </section>
+
+      <div class="modal hidden" id="quiz-result-modal" role="dialog" aria-modal="true" aria-labelledby="quiz-result-title">
+        <div class="modal-card">
+          <h3 id="quiz-result-title">Quiz result</h3>
+          <p class="status" id="quiz-result-message"></p>
+          <div class="actions">
+            <button class="secondary" type="button" id="quiz-result-retake">Retake quiz</button>
+            <button class="primary" type="button" id="quiz-result-back">Back to modules</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="card hidden" id="module-contract">
+        <h3>Contract Signature</h3>
+        <p class="status">Type your name and sign below to complete this contract.</p>
+        <label for="signature-name">Full name</label>
+        <input id="signature-name" type="text" placeholder="Type your full name" />
+        <div class="signature-pad">
+          <canvas id="signature-canvas" width="600" height="200"></canvas>
+        </div>
+        <div class="actions">
+          <button class="secondary" type="button" id="signature-clear">Clear</button>
+          <button class="primary" type="button" id="signature-submit" disabled>Sign contract</button>
+        </div>
+        <p class="status" id="signature-status"></p>
       </section>
 
       <section class="card" id="module-complete">
         <div class="actions">
           <button class="primary" id="mark-complete">Mark complete</button>
-          <a class="secondary" href="./training.html">Back to training</a>
         </div>
         <p class="status" id="completion-status"></p>
+      </section>
+
+      <section class="card" id="module-footer">
+        <div class="actions">
+          <button class="secondary" id="return-to-modules-bottom" type="button">Back to modules</button>
+        </div>
       </section>
     </main>
 

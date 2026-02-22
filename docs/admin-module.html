@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Module Editor - Training</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" />
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <header>
+      <img src="./assets/logo-mark.png" alt="New Leaf logo" />
+      <h1>Module Editor</h1>
+      <nav>
+        <a href="./training.html">Training</a>
+        <a href="./admin.html">Admin</a>
+        <button id="sign-out">Sign out</button>
+      </nav>
+    </header>
+
+    <main class="module-shell">
+      <section class="card">
+        <div class="panel-header">
+          <div>
+            <h2 id="module-editor-title">New module</h2>
+            <p class="status" id="module-visibility">Unpublished</p>
+          </div>
+          <button class="secondary" type="button" id="back-to-admin">Back to admin</button>
+        </div>
+
+        <form id="module-form" class="stack">
+          <input type="hidden" id="module-id" />
+
+          <label for="module-title">Title</label>
+          <input id="module-title" type="text" required />
+
+
+            <div class="grid">
+              <div>
+                <label for="module-section">Section</label>
+                <select id="module-section" required></select>
+              </div>
+              <div>
+                <label for="module-type">Type</label>
+                <select id="module-type">
+                  <option value="page">Page</option>
+                  <option value="quiz">Quiz</option>
+                  <option value="contract">Contract</option>
+                </select>
+              </div>
+            </div>
+
+          <div id="completion-mode-wrap">
+            <label for="completion-mode">Completion</label>
+            <select id="completion-mode">
+              <option value="mark">Mark complete</option>
+            </select>
+          </div>
+
+          <div id="page-builder" class="stack">
+            <label>Page content</label>
+            <p class="status hidden" id="contract-note">Contracts require a typed name and drawn signature to complete.</p>
+            <div class="editor-wrap">
+              <div id="editor" class="editor"></div>
+              <div id="image-overlay" class="image-overlay hidden">
+                <span class="resize-handle" data-dir="nw"></span>
+                <span class="resize-handle" data-dir="ne"></span>
+                <span class="resize-handle" data-dir="sw"></span>
+                <span class="resize-handle" data-dir="se"></span>
+              </div>
+            </div>
+
+            <div class="stack">
+              <div class="panel-header">
+                <h3>Attachments</h3>
+                <button class="secondary" type="button" id="add-attachment">Add file link</button>
+              </div>
+              <div id="attachment-list" class="stack"></div>
+            </div>
+          </div>
+
+          <div id="quiz-builder" class="stack hidden">
+            <div class="panel-header">
+              <h3>Quiz builder</h3>
+              <button class="secondary" type="button" id="add-question">Add question</button>
+            </div>
+            <label for="quiz-required">Required correct answers</label>
+            <div class="quiz-required-row">
+              <input id="quiz-required" type="number" min="1" placeholder="All correct if left blank" />
+              <span class="status" id="quiz-required-total">/ 0</span>
+            </div>
+            <div id="question-list" class="stack"></div>
+          </div>
+
+          <div class="status" id="module-status-text"></div>
+
+          <div class="actions">
+            <button class="secondary" type="submit" data-module-status="draft">Save as unpublished</button>
+            <button class="primary" type="submit" data-module-status="published">Publish module</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <footer>Edit modules here before publishing to trainees.</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+    <script type="module" src="./js/admin-module.js"></script>
+  </body>
+</html>
