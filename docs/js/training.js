@@ -23,6 +23,11 @@ let modules = [];
 let progressByModule = {};
 let selectedSectionId = null;
 
+function getSectionIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("sectionId");
+}
+
 function getSectionModules(sectionId) {
   return modules.filter((m) => m.sectionId === sectionId);
 }
@@ -95,7 +100,8 @@ function renderModuleList() {
       </div>
     `;
     const openModule = () => {
-      window.location.href = `./module.html?id=${module.id}`;
+      const sectionParam = module.sectionId ? `&sectionId=${module.sectionId}` : "";
+      window.location.href = `./module.html?id=${module.id}${sectionParam}`;
     };
     card.addEventListener("click", openModule);
     card.addEventListener("keydown", (event) => {
@@ -109,8 +115,12 @@ function renderModuleList() {
 }
 
 async function loadTrainingData(user, isAdmin) {
-  const sectionsQuery = query(collection(db, "sections"), orderBy("order", "asc"));
-  const modulesQuery = query(collection(db, "modules"), orderBy("order", "asc"));
+  const sectionsQuery = isAdmin
+    ? query(collection(db, "sections"), orderBy("order", "asc"))
+    : query(collection(db, "sections"), where("status", "==", "published"));
+  const modulesQuery = isAdmin
+    ? query(collection(db, "modules"), orderBy("order", "asc"))
+    : query(collection(db, "modules"), where("status", "==", "published"));
 
   const [sectionsSnap, modulesSnap, progressSnap] = await Promise.all([
     getDocs(sectionsQuery),
@@ -126,14 +136,20 @@ async function loadTrainingData(user, isAdmin) {
     (module) => module.status === "published" && visibleSectionIds.has(module.sectionId)
   );
 
-  sections = visibleSections;
-  modules = visibleModules;
+  const sortByOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
+  sections = visibleSections.sort(sortByOrder);
+  modules = visibleModules.sort(sortByOrder);
   progressByModule = {};
   progressSnap.forEach((docSnap) => {
     progressByModule[docSnap.id] = docSnap.data();
   });
 
-  selectedSectionId = sections[0]?.id || null;
+  const initialSectionId = getSectionIdFromUrl();
+  if (initialSectionId && sections.some((section) => section.id === initialSectionId)) {
+    selectedSectionId = initialSectionId;
+  } else {
+    selectedSectionId = sections[0]?.id || null;
+  }
   renderSectionList();
   renderModuleList();
 }

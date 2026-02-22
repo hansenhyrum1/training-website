@@ -41,10 +41,12 @@ let activeQuiz = null;
 let quizState = null;
 let activeQuizMeta = { userId: null, moduleId: null };
 let quizCompleted = false;
+let currentSectionId = null;
 
 wireSignOut("#sign-out");
 const goToModules = () => {
-  window.location.href = "./training.html";
+  const sectionParam = currentSectionId ? `?sectionId=${currentSectionId}` : "";
+  window.location.href = `./training.html${sectionParam}`;
 };
 if (returnToModulesTopBtn) returnToModulesTopBtn.addEventListener("click", goToModules);
 if (returnToModulesBottomBtn) returnToModulesBottomBtn.addEventListener("click", goToModules);
@@ -70,13 +72,18 @@ if (quizResultRetake) {
 
 if (quizResultBack) {
   quizResultBack.addEventListener("click", () => {
-    window.location.href = "./training.html";
+    goToModules();
   });
 }
 
 function getModuleId() {
   const params = new URLSearchParams(window.location.search);
   return params.get("id");
+}
+
+function getSectionId() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("sectionId");
 }
 
 function formatMeta(moduleDoc) {
@@ -516,6 +523,7 @@ requireAuth({
     moduleTitle.textContent = moduleDoc.title || "Module";
     moduleHeading.textContent = moduleDoc.title || "Module";
     moduleMeta.innerHTML = formatMeta(moduleDoc);
+    currentSectionId = moduleDoc.sectionId || getSectionId();
 
     if (moduleDoc.sectionId) {
       const sectionSnap = await getDoc(doc(db, "sections", moduleDoc.sectionId));
